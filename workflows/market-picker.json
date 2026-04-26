@@ -1,0 +1,452 @@
+{
+  "name": "Global Market Picker",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "YOUR_CREDENTIAL_ID_1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9-21 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "YOUR_CREDENTIAL_ID_2",
+      "name": "Every Hour Market Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -48,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=SPY,QQQ,AAPL,NVDA,PLTR,AMD,TSLA,COIN,SOFI&region=US&lang=en-US",
+        "options": {}
+      },
+      "id": "YOUR_CREDENTIAL_ID_3",
+      "name": "Scan: US Stocks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=BP.L,SHEL.L,HSBA.L,AML.L,GSK.L,VOD.L,LLOY.L&region=GB&lang=en-GB",
+        "options": {}
+      },
+      "id": "YOUR_CREDENTIAL_ID_4",
+      "name": "Scan: UK Stocks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=EWG,EWJ,FXI,EEM,VGK,VFEM.L&region=US&lang=en-US",
+        "options": {}
+      },
+      "id": "YOUR_CREDENTIAL_ID_5",
+      "name": "Scan: Europe & Asia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=PLTR,IONQ,RKLB,AMD,SOFI,HOOD,AFRM&region=US&lang=en-US",
+        "options": {}
+      },
+      "id": "YOUR_CREDENTIAL_ID_6",
+      "name": "Scan: Catalysts & News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=percent_change_24h&per_page=10&page=1&sparkline=false&price_change_percentage=24h",
+        "options": {}
+      },
+      "id": "YOUR_CREDENTIAL_ID_7",
+      "name": "Scan: Crypto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Yahoo RSS feeds - they return XML\nconst parseRSS = (data) => {\n  try {\n    // n8n auto-parses XML to JSON for RSS feeds\n    const items = data.rss?.channel?.item || data.items || [];\n    const arr = Array.isArray(items) ? items : [items];\n    return arr.slice(0, 5).map(i => (i.title || '') + ': ' + (i.description || '').replace(/<[^>]*>/g,'').substring(0,100)).join(' | ');\n  } catch(e) {\n    return JSON.stringify(data).substring(0, 300);\n  }\n};\n\n// Parse CoinGecko data\nconst parseCrypto = (data) => {\n  try {\n    const coins = Array.isArray(data) ? data : [];\n    return coins.slice(0, 5).map(c => \n      `${c.symbol?.toUpperCase()}: $${c.current_price} (${c.price_change_percentage_24h?.toFixed(1)}% 24h)`\n    ).join(' | ');\n  } catch(e) {\n    return JSON.stringify(data).substring(0, 200);\n  }\n};\n\nconst us = $('Scan: US Stocks').item.json;\nconst uk = $('Scan: UK Stocks').item.json;\nconst global = $('Scan: Europe & Asia').item.json;\nconst catalysts = $('Scan: Catalysts & News').item.json;\nconst crypto = $('Scan: Crypto').item.json;\n\nconst usData = parseRSS(us);\nconst ukData = parseRSS(uk);\nconst globalData = parseRSS(global);\nconst catalystData = parseRSS(catalysts);\nconst cryptoData = parseCrypto(crypto);\n\nreturn [{json: {\n  usData: usData || 'No US data',\n  ukData: ukData || 'No UK data',\n  globalData: globalData || 'No global data',\n  catalystData: catalystData || 'No catalyst data',\n  cryptoData: cryptoData || 'No crypto data',\n  timestamp: new Date().toLocaleString('en-GB')\n}}];"
+      },
+      "id": "YOUR_CREDENTIAL_ID_8",
+      "name": "Combine All Scans",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $input.item.json.message?.content || $input.item.json.content || 'No analysis available';\nconst ts = $('Combine All Scans').item.json.timestamp;\n\nconst message = `\ud83d\udd50 ${ts}\n________________\n\n${analysis}\n\n________________\n_\u2139\ufe0f Information only \u2014 not financial advice. Always do your own research._`;\n\nreturn [{json: {message}}];"
+      },
+      "id": "YOUR_CREDENTIAL_ID_9",
+      "name": "Format Discord Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.item.json.message;\n// Discord limit is 2000 chars - split if needed\nif (msg.length <= 1900) {\n  return [{json: {part1: msg, part2: null}}];\n}\n// Split at a sensible point\nconst splitAt = msg.lastIndexOf('\\n', 1800);\nreturn [{json: {\n  part1: msg.substring(0, splitAt),\n  part2: msg.substring(splitAt)\n}}];"
+      },
+      "id": "YOUR_CREDENTIAL_ID_10",
+      "name": "Check Message Length",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "YOUR_DISCORD_GUILD_ID",
+          "mode": "list"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "YOUR_MARKET_SCANNER_CHANNEL_ID",
+          "mode": "list",
+          "cachedResultName": "market-scanner",
+          "cachedResultUrl": "https://discord.com/channels/YOUR_DISCORD_GUILD_ID/YOUR_MARKET_SCANNER_CHANNEL_ID"
+        },
+        "content": "={{ $json.part1 }}",
+        "options": {}
+      },
+      "id": "YOUR_CREDENTIAL_ID_11",
+      "name": "Discord: Market Alert",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        416
+      ],
+      "webhookId": "YOUR_CREDENTIAL_ID_12",
+      "credentials": {
+        "discordBotApi": {
+          "id": "YOUR_DISCORD_CREDENTIAL_ID",
+          "name": "Discord Bot account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-part2",
+              "leftValue": "={{ $json.part2 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "YOUR_CREDENTIAL_ID_13",
+      "name": "Has Part 2?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "YOUR_DISCORD_GUILD_ID",
+          "mode": "list"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "YOUR_MARKET_SCANNER_CHANNEL_ID",
+          "mode": "list",
+          "cachedResultName": "market-scanner",
+          "cachedResultUrl": "https://discord.com/channels/YOUR_DISCORD_GUILD_ID/YOUR_MARKET_SCANNER_CHANNEL_ID"
+        },
+        "content": "=const msg = $input.item.json.message || \"\";\n\n// Discord limit is 2000, we use 1900 to be safe with emojis/formatting\nif (msg.length <= 1900) {\n  return [{ \n    json: { \n      part1: msg, \n      part2: \"\" // Explicitly empty string\n    } \n  }];\n}\n\n// Find a good splitting point (last newline before the limit)\nlet splitAt = msg.lastIndexOf('\\n', 1900);\n\n// If no newline found, just force split at 1900\nif (splitAt <= 0) splitAt = 1900;\n\nconst part1 = msg.substring(0, splitAt).trim();\nconst part2 = msg.substring(splitAt).trim();\n\nreturn [{\n  json: {\n    part1: part1,\n    part2: part2\n  }\n}];",
+        "options": {}
+      },
+      "id": "YOUR_CREDENTIAL_ID_14",
+      "name": "Discord: Market Alert Part 2",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        576
+      ],
+      "webhookId": "YOUR_CREDENTIAL_ID_15",
+      "credentials": {
+        "discordBotApi": {
+          "id": "YOUR_DISCORD_CREDENTIAL_ID",
+          "name": "Discord Bot account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "deepseek-r1:latest",
+          "mode": "list",
+          "cachedResultName": "deepseek-r1:latest"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### CONTEXT\nYou are a professional financial analyst. Below is a list of real-time market scan results for today, April 22, 2026.\n\n### MARKET DATA INPUT\n{{ $json.combinedMarketData }}\n\n### TASK\n1. Analyze the data provided above.\n2. Pick the \"Top 10\" most actionable insights or stock movers.\n3. Format the output as a sharp, high-energy Discord alert.\n4. If a specific ticker (like HOPE or NINE) is mentioned with a huge gain, highlight it.\n\n### OUTPUT RULES\n- Do not ask for more data. \n- Use the data provided in the 'MARKET DATA INPUT' section only.\n- Use Emojis for readability.\n- Add a \"Actionable Pick of the Day\" section at the bottom."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        592,
+        256
+      ],
+      "id": "YOUR_CREDENTIAL_ID_16",
+      "name": "Message a model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "YOUR_OLLAMA_CREDENTIAL_ID",
+          "name": "Ollama account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Scan: US Stocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every Hour Market Hours": {
+      "main": [
+        [
+          {
+            "node": "Scan: US Stocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan: US Stocks": {
+      "main": [
+        [
+          {
+            "node": "Scan: UK Stocks",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Combine All Scans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan: UK Stocks": {
+      "main": [
+        [
+          {
+            "node": "Scan: Europe & Asia",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Combine All Scans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan: Europe & Asia": {
+      "main": [
+        [
+          {
+            "node": "Scan: Catalysts & News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Combine All Scans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan: Catalysts & News": {
+      "main": [
+        [
+          {
+            "node": "Scan: Crypto",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Combine All Scans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan: Crypto": {
+      "main": [
+        [
+          {
+            "node": "Combine All Scans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine All Scans": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Discord Message": {
+      "main": [
+        [
+          {
+            "node": "Check Message Length",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Message Length": {
+      "main": [
+        [
+          {
+            "node": "Discord: Market Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Part 2?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Part 2?": {
+      "main": [
+        [
+          {
+            "node": "Discord: Market Alert Part 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Format Discord Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "YOUR_CREDENTIAL_ID_17",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_T212_API_KEY"
+  },
+  "id": "7kdXaHeCM0DdpB0T",
+  "tags": []
+}

@@ -1,0 +1,1075 @@
+{
+  "name": "Trading212 AI Autonomous Trader v2",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-morning",
+      "name": "8:30am Weekdays",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 16 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-afternoon",
+      "name": "4:00pm Weekdays",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://live.trading212.com/api/v0/equity/account/cash",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "get-cash",
+      "name": "GET Cash Balance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "BUVzosxRd3t2v7HY",
+          "name": "TRAD21"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cash-check",
+              "leftValue": "={{ $json.free }}",
+              "rightValue": 10,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-cash",
+      "name": "Cash > \u00a310?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://live.trading212.com/api/v0/equity/portfolio",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "get-portfolio",
+      "name": "GET Portfolio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "BUVzosxRd3t2v7HY",
+          "name": "TRAD21"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_TAVILY_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {},
+        "jsonBody": "{\"query\": \"best performing ETFs index funds UK ISA buy now 2026\", \"search_depth\": \"basic\", \"max_results\": 5, \"include_answer\": true}"
+      },
+      "id": "tavily-etf",
+      "name": "Tavily ETF Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cash = $('GET Cash Balance').item.json.free;\nconst portfolio = $('GET Portfolio').item.json;\nconst r = $input.item.json;\nconst etfContext = r.answer || (r.results || []).slice(0,3).map(x => x.content).join(' ') || 'No ETF data';\nreturn [{json: {cash, portfolio, etfContext}}];"
+      },
+      "id": "store-etf",
+      "name": "Store ETF Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_TAVILY_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {},
+        "jsonBody": "{\"query\": \"top growth stocks analysts recommend buy now technology AI 2026\", \"search_depth\": \"basic\", \"max_results\": 5, \"include_answer\": true}"
+      },
+      "id": "tavily-growth",
+      "name": "Tavily Growth Stocks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Store ETF Context').item.json;\nconst r = $input.item.json;\nconst growthContext = r.answer || (r.results || []).slice(0,3).map(x => x.content).join(' ') || 'No growth data';\nreturn [{json: {...prev, growthContext}}];"
+      },
+      "id": "store-growth",
+      "name": "Store Growth Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_TAVILY_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {},
+        "jsonBody": "{\"query\": \"global stock market outlook this week investment opportunities April 2026\", \"search_depth\": \"basic\", \"max_results\": 5, \"include_answer\": true}"
+      },
+      "id": "tavily-market",
+      "name": "Tavily Market Outlook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Store Growth Context').item.json;\nconst r = $input.item.json;\nconst marketContext = r.answer || (r.results || []).slice(0,3).map(x => x.content).join(' ') || 'No market data';\nreturn [{json: {...prev, marketContext}}];"
+      },
+      "id": "store-market",
+      "name": "Store Market Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_TAVILY_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {},
+        "jsonBody": "{\"query\": \"stocks ETFs biggest price drops this week buying opportunity dip 2026\", \"search_depth\": \"advanced\", \"max_results\": 5, \"include_answer\": true}"
+      },
+      "id": "tavily-dips",
+      "name": "Tavily Dip Scanner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cashData = $('GET Cash Balance').item.json;\nconst portfolioItems = $('GET Portfolio').all ? $('GET Portfolio').all().map(i => i.json) : [];\nconst etfContext = $('Store ETF Context').item.json.etfContext || '';\nconst growthContext = $('Store Growth Context').item.json.growthContext || '';\nconst marketContext = $('Store Market Context').item.json.marketContext || '';\nconst dipContext = $('Tavily Dip Scanner').item.json.answer || '';\n\nconst cash = cashData.free || 0;\nconst portfolio = portfolioItems.filter(p => p && p.ticker);\n\nreturn [{json: {\n  cash,\n  portfolio,\n  etfContext,\n  growthContext,\n  marketContext,\n  dipContext\n}}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "combine-all",
+      "name": "Combine All Research",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.item.json;\nconst cash = d.cash || 0;\nconst portfolio = d.portfolio || [];\nconst bubbleScore = d.bubbleScore || 0;\nconst riskPhase = d.riskPhase || 'Normal \ud83d\udfe2';\nconst positionMultiplier = d.positionMultiplier || 1;\n\nconst bubbleWarning = bubbleScore >= 13\n  ? 'CRITICAL RISK: Do NOT place any trades today'\n  : bubbleScore > 4\n  ? 'ELEVATED RISK: Reduce all position sizes by ' + Math.round((1 - positionMultiplier) * 100) + '%'\n  : 'Normal market conditions';\n\nconst systemPrompt = `You are an aggressive autonomous ISA portfolio manager targeting 15% annual growth for a UK Stocks & Shares ISA. You make all decisions independently with no human approval needed.\n\nGROWTH-FOCUSED ALLOCATION TARGETS:\n- 20% VUAGl_EQ (S&P 500 Accumulating ETF) \u2014 core holding, NEVER VUSAl_EQ\n- 10% ISFl_EQ (FTSE 100 ETF) \u2014 reduced, lower growth\n- 10% SWLDl_EQ (MSCI World ETF) \u2014 reduced\n- 15% EQQQl_EQ (Nasdaq 100 ETF) \u2014 increased, high growth\n- 10% VFEMl_EQ (Emerging Markets ETF)\n- 5% VERXl_EQ (Europe ex-UK ETF)\n- 30% Individual growth stocks \u2014 PLTR_US_EQ, AMD_US_EQ, SOFI_US_EQ, HOOD_US_EQ, IONQ_US_EQ, COIN_US_EQ, RKLB_US_EQ\n\nAGGRESSIVE GROWTH RULES:\n1. Target 15% annual return \u2014 be bold, not passive\n2. Favour high-growth individual stocks over safe ETFs when momentum is strong\n3. Up to 40% of cash into a single high-conviction opportunity\n4. Only 2 instruments per trade maximum \u2014 concentrate for bigger gains\n5. NEVER recommend VUSAl_EQ \u2014 ALWAYS use VUAGl_EQ\n6. Total trades MUST NOT exceed available cash\n7. Individual stocks only if share price under \u00a350\n\nAGGRESSIVE DIP BUYING:\n- 5-9% drop + strong fundamentals = BUY, up to 30% of cash\n- 10-19% drop + strong fundamentals = AGGRESSIVE BUY, up to 40% of cash\n- 20%+ drop + strong fundamentals = ALL IN, up to 50% of cash\n- Panic sells, macro fear, rate news = ALWAYS BUY THE DIP aggressively\n- Reddit/WSB bullish momentum = entry signal, add 10% extra allocation\n\nMOMENTUM RULES:\n- If a stock is up 10%+ with strong volume and positive news = chase the momentum, buy\n- Do NOT always wait for dips \u2014 buy breakouts when conviction is high\n- Rotate out of lagging ETFs into outperforming growth stocks\n\nVERIFIED T212 UK TICKERS:\n- ETFs: VUAGl_EQ, ISFl_EQ, SWLDl_EQ, VFEMl_EQ, VERXl_EQ, EQQQl_EQ, VWRLl_EQ, VHYLl_EQ\n- Growth stocks: PLTR_US_EQ, AMD_US_EQ, SOFI_US_EQ, HOOD_US_EQ, IONQ_US_EQ, COIN_US_EQ, RKLB_US_EQ, AFRM_US_EQ, UPST_US_EQ, MARA_US_EQ, RIOT_US_EQ\n- NEVER recommend: VUSAl_EQ, SCHAD, VEMAX, SCHD, IVV, VYM, GLD, QQQ, NVDA, AAPL, TSLA, AMZN, MSFT (too expensive)\n\nReturn ONLY valid JSON:\n{\"trades\":[{\"ticker\":\"PLTR_US_EQ\",\"amount\":9.00,\"reason\":\"Strong AI momentum, underweight growth stocks\",\"isDip\":false}],\"summary\":\"Brief strategy explanation\"}`;\n\nconst userPrompt = `MARKET RESEARCH (live data):\n\nTOP ETFs THIS WEEK:\n${d.etfContext || 'No data'}\n\nGROWTH STOCKS:\n${d.growthContext || 'No data'}\n\nMARKET OUTLOOK:\n${d.marketContext || 'No data'}\n\nDIP OPPORTUNITIES (act aggressively on all of these):\n${d.dipContext || 'No dips identified'}\n\nCURRENT PORTFOLIO:\n${JSON.stringify(portfolio)}\n\nAVAILABLE CASH: \u00a3${cash}\nCRITICAL: Total of ALL trades combined MUST NOT exceed \u00a3${cash}. If cash is under \u00a320 place only ONE trade.\n\nMARKET RISK: ${riskPhase} (bubble score: ${bubbleScore}/15)\n${bubbleWarning}\n\nECONOMIC CALENDAR (next 48 hours):\n${d.econContext || 'No major events'}\n\nBe aggressive. Target 15% annual growth. Favour growth stocks over safe ETFs. Buy dips hard. Use ALL the cash. Return JSON only.`;\n\nreturn [{json: {cash, portfolio, systemPrompt, userPrompt}}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "build-prompt",
+      "name": "Build Ollama Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "value": "qwen2.5:14b",
+          "mode": "list",
+          "cachedResultName": "qwen2.5:14b"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.systemPrompt }}",
+              "role": "system"
+            },
+            {
+              "content": "={{ $json.userPrompt }}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ollama-decide",
+      "name": "Ollama: Decide Trades",
+      "type": "n8n-nodes-base.ollama",
+      "typeVersion": 1,
+      "position": [
+        3740,
+        300
+      ],
+      "credentials": {
+        "ollamaApi": {
+          "id": "YOUR_OLLAMA_CREDENTIAL_ID",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json.content || $input.item.json.message?.content || $input.item.json.response || '';\nconst cash = $('Build Ollama Prompt').item.json.cash || 0;\n\nlet parsed;\ntry {\n  parsed = JSON.parse(raw.replace(/```json/g,'').replace(/```/g,'').trim());\n} catch(e) {\n  const match = raw.match(/\\{[\\s\\S]*\\}/);\n  if (match) { parsed = JSON.parse(match[0]); }\n  else { throw new Error('Could not parse Ollama response: ' + raw.substring(0,200)); }\n}\n\nconst trades = parsed.trades || [];\nconst summary = parsed.summary || 'AI trade decision';\nconst hasDipTrades = trades.some(t => t.isDip);\nreturn [{json: {trades, summary, cash, tradeCount: trades.length, hasDipTrades}}];"
+      },
+      "id": "parse-trades",
+      "name": "Parse Trades",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3960,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "guildId": {
+          "__rl": true,
+          "value": "YOUR_DISCORD_GUILD_ID",
+          "mode": "list",
+          "cachedResultName": "HomeLab-CN1-Lab"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "YOUR_TRADING212_CHANNEL_ID",
+          "mode": "id"
+        },
+        "content": "=\ud83d\udcca **Trading Bot: Trades Incoming**{{ $json.hasDipTrades ? ' \ud83d\udcc9 Dip spotted \u2014 buying it!' : '' }}\n{{ $json.summary }}\n\n**Planned trades ({{ $json.tradeCount }}):**\n{{ $json.trades.map(t => `\u2022 ${t.ticker}: \u00a3${t.amount}${t.isDip ? ' \ud83c\udfaf DIP BUY' : ''} \u2014 ${t.reason}`).join('\\n') }}\n\n**Available cash:** \u00a3{{ $json.cash }}\n________________",
+        "options": {},
+        "resource": "message"
+      },
+      "id": "discord-notify",
+      "name": "Discord: Notify Trades",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        4180,
+        300
+      ],
+      "credentials": {
+        "discordBotApi": {
+          "id": "YOUR_DISCORD_CREDENTIAL_ID",
+          "name": "Discord Bot account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "trades",
+        "options": {}
+      },
+      "id": "split-trades",
+      "name": "Split Trades",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        4400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = $json.ticker;\nconst amount = $json.amount;\nconst reason = $json.reason;\nconst isDip = $json.isDip || false;\n\n// Known UK-listed ETFs on T212 (London Stock Exchange, append .L)\nconst ukEtfs = [\n  'VUSA', 'VUAG', 'ISF', 'SWLD', 'VFEM', 'VERX', 'EQQQ',\n  'VWRL', 'VHYL', 'VAPX', 'VJPN', 'VEUR', 'VUKE', 'VMID',\n  'CSPX', 'IGUS', 'IUSA', 'IEEM', 'IWRD', 'IUKD', 'IUIT',\n  'CSP1', 'SPXS', 'HMWO', 'HSBC', 'LTAM', 'LWDB', 'SMT',\n  'DAGB', 'INRG', 'RBTX', 'BRIC', 'LGGG', 'AAPL', 'AMZN'\n];\n\nlet yahooSymbol;\n\nif (ticker.includes('_US_EQ')) {\n  // Explicit US stock - strip suffix only\n  yahooSymbol = ticker.replace('_US_EQ', '');\n} else {\n  // Strip the T212 suffix (lowercase letters + _EQ)\n  const base = ticker.replace(/[a-z]*_EQ$/, '');\n  \n  // Check if it's a known UK-listed ETF\n  const isUkListed = ukEtfs.some(etf => base.toUpperCase() === etf.toUpperCase());\n  \n  if (isUkListed) {\n    yahooSymbol = base + '.L';\n  } else {\n    // Unknown ticker - try without .L first (US format)\n    // Ollama sometimes hallucinates US tickers in UK format\n    yahooSymbol = base;\n  }\n}\n\nreturn [{json: {ticker, amount, reason, isDip, yahooSymbol, base: ticker.replace(/[a-z]*_EQ$/, '').replace('_US_EQ', '')}}];"
+      },
+      "id": "map-ticker",
+      "name": "Map Ticker to Yahoo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://query1.finance.yahoo.com/v8/finance/chart/{{ $json.yahooSymbol }}?interval=1d&range=1d",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-price",
+      "name": "Get Live Price (Yahoo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4840,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\nconst ticker = $('Map Ticker to Yahoo').item.json.ticker;\nconst amount = $('Map Ticker to Yahoo').item.json.amount;\nconst reason = $('Map Ticker to Yahoo').item.json.reason;\nconst isDip = $('Map Ticker to Yahoo').item.json.isDip;\n\nconst result = data.chart?.result?.[0];\nconst price = result?.meta?.regularMarketPrice || result?.meta?.previousClose;\n\nif (!price || price <= 0) {\n  throw new Error('Could not get price for ' + ticker + ' (Yahoo: ' + $('Map Ticker to Yahoo').item.json.yahooSymbol + ')');\n}\n\nconst quantity = Math.floor((amount / price) * 100) / 100;\n\nconst finalQty = Math.max(quantity, 0.01);\nreturn [{json: {ticker, amount, reason, isDip, price, quantity: finalQty}}];"
+      },
+      "id": "calc-quantity",
+      "name": "Calculate Quantity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5060,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://live.trading212.com/api/v0/equity/orders/market",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {},
+        "jsonBody": "={\"ticker\":\"{{ $json.ticker }}\",\"quantity\":{{ $json.quantity }}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "place-order",
+      "name": "Place Market Order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5280,
+        300
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "BUVzosxRd3t2v7HY",
+          "name": "TRAD21"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "guildId": {
+          "__rl": true,
+          "value": "YOUR_DISCORD_GUILD_ID",
+          "mode": "list",
+          "cachedResultName": "HomeLab-CN1-Lab"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "YOUR_TRADING212_CHANNEL_ID",
+          "mode": "id"
+        },
+        "content": "=\ud83d\udce6 **order(s) placed**\n\ud83d\udd50 {{ new Date().toLocaleString('en-GB') }}\n\n=\u2705 **Trades Executed Successfully**\n________________\n\n{{ $('Calculate Quantity').item.json.isDip ? '\ud83c\udfaf **DIP BUY**' : '\ud83d\udcc8 **Rebalance**' }} \u2014 **{{ $('Calculate Quantity').item.json.ticker }}**\n{{ $('Calculate Quantity').item.json.quantity }} shares @ \u00a3{{ $('Calculate Quantity').item.json.price.toFixed(2) }}\nTotal: \u00a3{{ $('Calculate Quantity').item.json.amount }}\n\n_{{ $('Calculate Quantity').item.json.reason }}_",
+        "options": {},
+        "resource": "message"
+      },
+      "id": "discord-confirm",
+      "name": "Discord: Confirm Execution",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        5500,
+        300
+      ],
+      "credentials": {
+        "discordBotApi": {
+          "id": "YOUR_DISCORD_CREDENTIAL_ID",
+          "name": "Discord Bot account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://financialmodelingprep.com/stable/economic-calendar?from=2026-04-18&to=2026-04-20&apikey=YOUR_FMP_API_KEY",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "econ-calendar",
+      "name": "Check Economic Calendar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const tavily = $input.item.json;\nconst econText = tavily.answer || (tavily.results||[]).slice(0,2).map(r=>r.title).join(' ') || '';\n\nconst highImpactWords = ['fed', 'fomc', 'interest rate', 'cpi', 'inflation', 'jobs report', 'nonfarm'];\nconst hasMajorEvent = highImpactWords.some(w => econText.toLowerCase().includes(w));\n\nconst econContext = hasMajorEvent\n  ? 'HIGH IMPACT EVENT: ' + econText.substring(0, 200) + ' \u2014 reduce position sizes 50%, ETFs only'\n  : 'No major economic events \u2014 normal trading conditions';\n\n// Get all upstream data by node name\nconst combined = $('Combine All Research').item.json;\nconst bubble = $('Process Bubble Score').item.json;\n\nreturn [{json: {\n  cash: combined.cash,\n  portfolio: combined.portfolio,\n  etfContext: combined.etfContext,\n  growthContext: combined.growthContext,\n  marketContext: combined.marketContext,\n  dipContext: combined.dipContext,\n  bubbleScore: bubble.bubbleScore || 0,\n  riskPhase: bubble.riskPhase || 'Normal \ud83d\udfe2',\n  positionMultiplier: bubble.positionMultiplier || 1,\n  econContext,\n  hasMajorEvent\n}}];"
+      },
+      "id": "econ-filter",
+      "name": "Process Economic Calendar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_TAVILY_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"query\":\"VIX fear greed index put call ratio S&P 500 bubble market risk today 2026\",\"search_depth\":\"basic\",\"max_results\":3,\"include_answer\":true}",
+        "options": {}
+      },
+      "id": "isa-bubble-detector",
+      "name": "Bubble Detector",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const combined = $('Combine All Research').item.json;\nconst bubble = $input.item.json;\nconst bubbleContext = bubble.answer || (bubble.results||[]).slice(0,2).map(r=>r.content).join(' ') || '';\n\nlet bubbleScore = 0;\nconst text = bubbleContext.toLowerCase();\n\nconst euphoriaWords = ['all-time high','record high','irrational exuberance','melt up','parabolic','euphoria','mania','bubble'];\neuphoriaWords.forEach(w => { if(text.includes(w)) bubbleScore++; });\n\nconst fearWords = ['correction','bear market','recession','crash','selloff'];\nfearWords.forEach(w => { if(text.includes(w)) bubbleScore--; });\n\nif(text.includes('overvalued') || text.includes('stretched valuation')) bubbleScore += 2;\nif(text.includes('vix') && (text.includes('below 15') || text.includes('complacency'))) bubbleScore += 2;\n\nbubbleScore = Math.max(0, Math.min(15, bubbleScore));\n\nlet riskPhase, positionMultiplier;\nif(bubbleScore <= 4) { riskPhase = 'Normal \ud83d\udfe2'; positionMultiplier = 1.0; }\nelse if(bubbleScore <= 7) { riskPhase = 'Caution \ud83d\udfe1'; positionMultiplier = 0.75; }\nelse if(bubbleScore <= 9) { riskPhase = 'Elevated \ud83d\udfe0'; positionMultiplier = 0.5; }\nelse if(bubbleScore <= 12) { riskPhase = 'Euphoria \ud83d\udd34'; positionMultiplier = 0.25; }\nelse { riskPhase = 'Critical \u26d4'; positionMultiplier = 0; }\n\nreturn [{json: {\n  ...combined,\n  bubbleScore,\n  riskPhase,\n  positionMultiplier,\n  bubbleContext: bubbleContext.substring(0, 300)\n}}];"
+      },
+      "id": "isa-bubble-score",
+      "name": "Process Bubble Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cat /home/YOUR_USER/mounts/YOUR_NAS/trading/isa_trades.csv 2>/dev/null | tail -30"
+      },
+      "id": "isa-read-trades",
+      "name": "Read ISA Trade Log",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        660,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const cashData = $('GET Cash Balance').item.json;\nconst portfolioData = $('GET Portfolio').all ? $('GET Portfolio').all().map(i=>i.json) : [];\n\nlet tradeLog = '';\ntry { tradeLog = $('Read ISA Trade Log').item.json.stdout || ''; } catch(e) {}\n\nconst lines = tradeLog.split('\\n').filter(l => l.includes(','));\nconst trades = lines.map(l => {\n  const p = l.split(',');\n  return {date: p[0], ticker: p[1], action: p[2], pnl: parseFloat(p[4])||0};\n}).filter(t => t.action === 'BUY');\n\nconst today = new Date().toISOString().split('T')[0];\nconst todayTrades = trades.filter(t => t.date && t.date.startsWith(today));\n\nlet circuitBreakerTriggered = false;\nlet pauseReason = '';\n\n// Daily trade limit \u2014 max 4 buys per day for ISA\nif(todayTrades.length >= 4) {\n  circuitBreakerTriggered = true;\n  pauseReason = 'DAILY LIMIT: ' + todayTrades.length + ' trades placed today';\n}\n\n// Cash too low\nconst cash = cashData.free || 0;\nif(cash < 5) {\n  circuitBreakerTriggered = true;\n  pauseReason = 'INSUFFICIENT CASH: \u00a3' + cash.toFixed(2) + ' available';\n}\n\nreturn [{json: {\n  cash,\n  portfolio: portfolioData,\n  circuitBreakerTriggered,\n  pauseReason,\n  todayTradeCount: todayTrades.length\n}}];"
+      },
+      "id": "isa-circuit-breaker",
+      "name": "ISA Circuit Breaker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cb-ok",
+              "leftValue": "={{ $json.pauseReason }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "isa-circuit-breaker-ok",
+      "name": "ISA Circuit Breaker OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "guildId": {
+          "__rl": true,
+          "value": "YOUR_DISCORD_GUILD_ID",
+          "mode": "list"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "YOUR_TRADING212_CHANNEL_ID",
+          "mode": "id"
+        },
+        "content": "=\ud83d\udea8 **ISA BOT \u2014 CIRCUIT BREAKER**\n\ud83d\udd50 {{ new Date().toLocaleString('en-GB') }}\n\n\u26d4 {{ $json.pauseReason }}\n\n_Trading paused \u2014 manual review required_",
+        "options": {}
+      },
+      "id": "isa-circuit-breaker-discord",
+      "name": "Discord: ISA Circuit Breaker",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        600
+      ],
+      "credentials": {
+        "discordBotApi": {
+          "id": "YOUR_DISCORD_CREDENTIAL_ID",
+          "name": "Discord Bot account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "echo \"{{ new Date().toISOString() }},{{ $('Calculate Quantity').item.json.ticker }},BUY,{{ $('Calculate Quantity').item.json.price }},{{ $('Calculate Quantity').item.json.amount }},{{ $('Calculate Quantity').item.json.quantity }}\" >> /home/YOUR_USER/mounts/YOUR_NAS/trading/isa_trades.csv"
+      },
+      "id": "isa-log-trade",
+      "name": "Log ISA Trade",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        4840,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "GET Cash Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8:30am Weekdays": {
+      "main": [
+        [
+          {
+            "node": "GET Cash Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4:00pm Weekdays": {
+      "main": [
+        [
+          {
+            "node": "GET Cash Balance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Cash Balance": {
+      "main": [
+        [
+          {
+            "node": "Cash > \u00a310?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cash > \u00a310?": {
+      "main": [
+        [
+          {
+            "node": "GET Portfolio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GET Portfolio": {
+      "main": [
+        [
+          {
+            "node": "Read ISA Trade Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily ETF Research": {
+      "main": [
+        [
+          {
+            "node": "Store ETF Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store ETF Context": {
+      "main": [
+        [
+          {
+            "node": "Tavily Growth Stocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Growth Stocks": {
+      "main": [
+        [
+          {
+            "node": "Store Growth Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Growth Context": {
+      "main": [
+        [
+          {
+            "node": "Tavily Market Outlook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Market Outlook": {
+      "main": [
+        [
+          {
+            "node": "Store Market Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Market Context": {
+      "main": [
+        [
+          {
+            "node": "Tavily Dip Scanner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily Dip Scanner": {
+      "main": [
+        [
+          {
+            "node": "Combine All Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine All Research": {
+      "main": [
+        [
+          {
+            "node": "Bubble Detector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Ollama Prompt": {
+      "main": [
+        [
+          {
+            "node": "Ollama: Decide Trades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama: Decide Trades": {
+      "main": [
+        [
+          {
+            "node": "Parse Trades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Trades": {
+      "main": [
+        [
+          {
+            "node": "Discord: Notify Trades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord: Notify Trades": {
+      "main": [
+        [
+          {
+            "node": "Split Trades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Trades": {
+      "main": [
+        [
+          {
+            "node": "Map Ticker to Yahoo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Ticker to Yahoo": {
+      "main": [
+        [
+          {
+            "node": "Get Live Price (Yahoo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Live Price (Yahoo)": {
+      "main": [
+        [
+          {
+            "node": "Calculate Quantity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Quantity": {
+      "main": [
+        [
+          {
+            "node": "Place Market Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Place Market Order": {
+      "main": [
+        [
+          {
+            "node": "Discord: Confirm Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Economic Calendar": {
+      "main": [
+        [
+          {
+            "node": "Process Economic Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Economic Calendar": {
+      "main": [
+        [
+          {
+            "node": "Build Ollama Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bubble Detector": {
+      "main": [
+        [
+          {
+            "node": "Process Bubble Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Bubble Score": {
+      "main": [
+        [
+          {
+            "node": "Check Economic Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read ISA Trade Log": {
+      "main": [
+        [
+          {
+            "node": "ISA Circuit Breaker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ISA Circuit Breaker": {
+      "main": [
+        [
+          {
+            "node": "ISA Circuit Breaker OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ISA Circuit Breaker OK?": {
+      "main": [
+        [
+          {
+            "node": "Tavily ETF Research",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discord: ISA Circuit Breaker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord: Confirm Execution": {
+      "main": [
+        [
+          {
+            "node": "Log ISA Trade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

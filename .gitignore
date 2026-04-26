@@ -1,0 +1,11 @@
+# Never commit these
+*.env
+.env*
+secrets.json
+credentials.json
+*_credentials*
+*.csv
+*.log
+
+# Local config overrides
+local_config.json
